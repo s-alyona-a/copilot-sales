@@ -5,21 +5,17 @@ services:
       context: ../DialogScribe
       dockerfile: Dockerfile.dev
     container_name: dialogscribe-dev
+    env_file:
+      - .env.fullstack
     environment:
-      - MISTRAL_API_KEY=C0OzOov5LJT5JI5os3ZDxJw96VIC7EiZ
       - ASR_URL=https://api.mistral.ai
       - ASR_MODEL=voxtral-mini-latest
-      - LLM_API_KEY=C0OzOov5LJT5JI5os3ZDxJw96VIC7EiZ
       - LLM_BASE_URL=https://api.mistral.ai/v1
       - LLM_MODEL=mistral-small-latest
-      - JWT_SECRET=dev-secret-change-in-prod
-      - API_KEY=
       - DATABASE_URL=sqlite+aiosqlite:////app/data/dialogscribe.db
       - HOST=0.0.0.0
       - PORT=7860
       - MAX_UPLOAD_SIZE_MB=500
-      - ADMIN_EMAIL=admin@local.dev
-      - ADMIN_PASSWORD=admin123
       - FRONTEND_URL=http://localhost:5173
     volumes:
       - dialogscribe_data:/app/data

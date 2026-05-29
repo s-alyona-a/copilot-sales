@@ -207,6 +207,27 @@ export async function getMindmap(transcript) {
 }
 
 // ---------------------------------------------------------------------------
+// Meeting Prep
+// ---------------------------------------------------------------------------
+
+/**
+ * POST /api/meeting-prep
+ * @param {{ companyData: string, catalogData: string, model?: string }} params
+ * @returns {Promise<{ id: string, markdown: string, model: string }>}
+ */
+export async function generateMeetingPrep({ companyData, catalogData, model }) {
+  return apiFetch('/api/meeting-prep', {
+    method:  'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body:    JSON.stringify({
+      company_data:  companyData,
+      catalog_data:  catalogData,
+      ...(model ? { model } : {}),
+    }),
+  })
+}
+
+// ---------------------------------------------------------------------------
 // Chat (Live Advisor)
 // ---------------------------------------------------------------------------
 

@@ -9,6 +9,7 @@
 
   const navItems = [
     { id: 'today', icon: '📅', label: 'Сегодня' },
+    { id: 'prep',  icon: '📋', label: 'Подготовка' },
     { id: 'live',  icon: '🎙️', label: 'В эфире' },
     { id: 'post',  icon: '📊', label: 'Итоги' },
   ]

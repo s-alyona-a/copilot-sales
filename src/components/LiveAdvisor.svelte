@@ -4,6 +4,7 @@
 
   const dispatch = createEventDispatcher()
   export let meeting
+  export let meetingPlan = null
 
   // ---- Transcript state ----
   let displayedLines = []

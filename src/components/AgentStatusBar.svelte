@@ -1,6 +1,7 @@
 <script>
   import { onMount, onDestroy } from 'svelte'
   import { checkHealth } from '../lib/api.js'
+  import { checkHealth as checkAgentHealth } from '../lib/agentApi.js'
 
   export let activeView
   export let activeMeeting
@@ -25,7 +26,6 @@
   const statusColor = { active: '#10b981', standby: '#f59e0b', idle: '#4b5a7a' }
 
   // ---- DialogScribe health ----
-  // 'checking' | 'online' | 'offline'
   let backendStatus = 'checking'
   let healthTimer
 
@@ -33,6 +33,15 @@
     backendStatus = 'checking'
     const ok = await checkHealth()
     backendStatus = ok ? 'online' : 'offline'
+  }
+
+  // ---- Sales Agent health ----
+  let agentStatus = 'checking'
+
+  async function pollAgentHealth() {
+    agentStatus = 'checking'
+    const ok = await checkAgentHealth()
+    agentStatus = ok ? 'online' : 'offline'
   }
 
   const backendColor = { checking: '#f59e0b', online: '#10b981', offline: '#ef4444' }
@@ -45,7 +54,8 @@
   onMount(() => {
     clockTimer  = setInterval(() => now = new Date(), 1000)
     pollHealth()
-    healthTimer = setInterval(pollHealth, 30_000)
+    pollAgentHealth()
+    healthTimer = setInterval(() => { pollHealth(); pollAgentHealth() }, 30_000)
   })
 
   onDestroy(() => {
@@ -62,6 +72,7 @@
   <div class="left">
     <span class="page-title">
       {#if activeView === 'today'}📅 Подготовка встреч
+      {:else if activeView === 'prep'}📋 Подготовка к встрече
       {:else if activeView === 'live'}🎙️ В эфире — {activeMeeting?.client ?? '—'}
       {:else if activeView === 'post'}📊 Итоги встречи — {activeMeeting?.client ?? '—'}
       {/if}
@@ -79,6 +90,26 @@
   </div>
 
   <div class="right">
+    <div
+      class="backend-chip"
+      class:backend-online={agentStatus === 'online'}
+      class:backend-offline={agentStatus === 'offline'}
+      title="Sales Agent API · http://localhost:8900"
+      on:click={pollAgentHealth}
+      role="button"
+      tabindex="0"
+      on:keydown={e => e.key === 'Enter' && pollAgentHealth()}
+    >
+      <span
+        class="dot backend-dot"
+        class:checking={agentStatus === 'checking'}
+        style="background:{backendColor[agentStatus]}"
+      ></span>
+      <span class="backend-label">Sales Agent</span>
+      <span class="backend-status" style="color:{backendColor[agentStatus]}">
+        {backendLabel[agentStatus]}
+      </span>
+    </div>
     <div
       class="backend-chip"
       class:backend-online={backendStatus === 'online'}

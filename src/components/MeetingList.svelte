@@ -1,10 +1,13 @@
 <script>
-  import { createEventDispatcher } from 'svelte'
+  import { createEventDispatcher, onMount } from 'svelte'
   import ClientDossier from './ClientDossier.svelte'
   import { fetchTodayMeetings, isCalDavConfigured } from '../lib/caldav.js'
+  import { getMeetingsToday, checkHealth } from '../lib/agentApi.js'
 
   const dispatch = createEventDispatcher()
   export let activeMeeting
+  export let savedCompanies = new Set()
+  export let cardsMap = {}
 
   const MOCK_MEETINGS = [
     {
@@ -13,7 +16,7 @@
       duration: '60 мин',
       client: 'ООО «РусТехСнаб»',
       contact: 'Дмитрий Орлов, Директор по закупкам',
-      inn: '7701234567',
+      inn: '5261103923',
       topic: 'Презентация нового логистического модуля',
       status: 'done',
       prepStatus: 'ready',
@@ -25,7 +28,7 @@
       duration: '45 мин',
       client: 'АО «СибирьЭнерго»',
       contact: 'Марина Белова, CFO',
-      inn: '5403987654',
+      inn: '4223117100',
       topic: 'Пересмотр условий контракта Q3',
       status: 'upcoming',
       prepStatus: 'ready',
@@ -47,9 +50,9 @@
       id: 4,
       time: '15:00',
       duration: '60 мин',
-      client: 'ПАО «АгроИнвест»',
+      client: 'ООО «АгроИнвест»',
       contact: 'Светлана Кузьмина, ИТ-директор',
-      inn: '6325067890',
+      inn: '6729047729',
       topic: 'Техническое согласование интеграции ERP',
       status: 'upcoming',
       prepStatus: 'pending',
@@ -58,43 +61,74 @@
   ]
 
   // ---- Data source toggle ----
-  let dataSource = 'mock'  // 'mock' | 'caldav'
+  let dataSource = 'mock'  // 'mock' | 'api' | 'caldav'
   let meetings = MOCK_MEETINGS
-  let caldavLoading = false
-  let caldavError = ''
+  let sourceLoading = false
+  let sourceError = ''
   let caldavConfigured = isCalDavConfigured()
+  let apiAvailable = false
 
-  async function loadCalDavMeetings() {
-    caldavLoading = true
-    caldavError = ''
+  onMount(async () => {
+    apiAvailable = await checkHealth()
+    if (apiAvailable) {
+      switchSource('api')
+    }
+  })
+
+  async function loadApiMeetings() {
+    sourceLoading = true
+    sourceError = ''
     try {
-      meetings = await fetchTodayMeetings()
+      meetings = await getMeetingsToday()
       if (meetings.length === 0) {
-        caldavError = 'Нет событий на сегодня'
+        sourceError = 'Нет встреч на сегодня'
       }
       selectedMeeting = meetings[0] || null
     } catch (e) {
-      caldavError = e.message || 'Ошибка CalDAV'
+      sourceError = e.message || 'Ошибка API'
+      meetings = MOCK_MEETINGS
+      selectedMeeting = meetings[0] || null
+    } finally {
+      sourceLoading = false
+    }
+  }
+
+  async function loadCalDavMeetings() {
+    sourceLoading = true
+    sourceError = ''
+    try {
+      meetings = await fetchTodayMeetings()
+      if (meetings.length === 0) {
+        sourceError = 'Нет событий на сегодня'
+      }
+      selectedMeeting = meetings[0] || null
+    } catch (e) {
+      sourceError = e.message || 'Ошибка CalDAV'
       meetings = []
       selectedMeeting = null
     } finally {
-      caldavLoading = false
+      sourceLoading = false
     }
   }
 
   function switchSource(source) {
     dataSource = source
-    caldavError = ''
+    sourceError = ''
     if (source === 'mock') {
       meetings = MOCK_MEETINGS
-      selectedMeeting = activeMeeting ?? meetings[1]
+      selectedMeeting = activeMeeting ?? meetings[0]
+    } else if (source === 'api') {
+      loadApiMeetings()
     } else {
       loadCalDavMeetings()
     }
   }
 
-  let selectedMeeting = activeMeeting ?? meetings[1]
+  let selectedMeeting = activeMeeting ?? meetings[0]
   $: dispatch('select', selectedMeeting)
+
+  // Получить карточку текущего клиента из cardsMap
+  $: currentCardData = selectedMeeting ? cardsMap[selectedMeeting.client] : undefined
 
   const statusLabels = { done: 'Завершена', upcoming: 'Предстоит', live: 'В эфире' }
   const prepLabels   = { ready: 'Готово', loading: 'Загружается…', pending: 'Ожидает' }
@@ -115,6 +149,13 @@
           >Mock</button>
           <button
             class="toggle-btn"
+            class:active={dataSource === 'api'}
+            disabled={!apiAvailable}
+            title={apiAvailable ? 'Sales Agent API' : 'Sales Agent API недоступен'}
+            on:click={() => switchSource('api')}
+          >API</button>
+          <button
+            class="toggle-btn"
             class:active={dataSource === 'caldav'}
             disabled={!caldavConfigured}
             title={caldavConfigured ? 'CalDAV' : 'Заполните VITE_CALDAV_* в .env'}
@@ -125,22 +166,20 @@
       <span class="date">{new Date().toLocaleDateString('ru-RU', { weekday: 'long', day: 'numeric', month: 'long' })}</span>
     </div>
 
-    {#if caldavLoading}
-      <div class="caldav-status loading">
-        <span class="spinner"></span> Загрузка CalDAV...
+    {#if sourceLoading}
+      <div class="source-status loading">
+        <span class="spinner"></span> Загрузка {dataSource === 'api' ? 'из API' : 'CalDAV'}...
       </div>
     {/if}
-    {#if caldavError}
-      <div class="caldav-status error">
-        {caldavError}
-        {#if dataSource === 'caldav'}
-          <button class="retry-link" on:click={loadCalDavMeetings}>Повторить</button>
-        {/if}
+    {#if sourceError}
+      <div class="source-status error">
+        {sourceError}
+        <button class="retry-link" on:click={() => switchSource(dataSource)}>Повторить</button>
       </div>
     {/if}
 
     <div class="meeting-list">
-      {#if meetings.length === 0 && !caldavLoading}
+      {#if meetings.length === 0 && !sourceLoading}
         <div class="empty-state">
           {#if dataSource === 'caldav'}
             Нет событий в календаре на сегодня
@@ -150,6 +189,7 @@
         </div>
       {/if}
       {#each meetings as m}
+        {@const hasCard = savedCompanies.has(m.client)}
         <button
           class="meeting-card"
           class:selected={selectedMeeting?.id === m.id}
@@ -169,6 +209,11 @@
               <span class="status-badge" class:done={m.status === 'done'}>
                 {statusLabels[m.status]}
               </span>
+              {#if hasCard}
+                <span class="card-badge ready">✓ Карточка</span>
+              {:else}
+                <span class="card-badge pending">Ожидание</span>
+              {/if}
               {#each m.tags as tag}
                 <span class="tag">{tag}</span>
               {/each}
@@ -177,11 +222,15 @@
 
           <div class="prep-col">
             <div class="prep-label">Prep Agent</div>
-            <div class="prep-status" style="color:{prepColors[m.prepStatus]}">
-              {#if m.prepStatus === 'loading'}
+            <div class="prep-status" style="color:{hasCard ? '#10b981' : prepColors[m.prepStatus]}">
+              {#if hasCard}
+                Готово
+              {:else if m.prepStatus === 'loading'}
                 <span class="spinner"></span>
+                {prepLabels[m.prepStatus]}
+              {:else}
+                {prepLabels[m.prepStatus] || prepLabels.pending}
               {/if}
-              {prepLabels[m.prepStatus]}
             </div>
           </div>
         </button>
@@ -194,8 +243,14 @@
     {#if selectedMeeting}
       <ClientDossier
         meeting={selectedMeeting}
+        existingCard={currentCardData?.card}
+        existingAnalysis={currentCardData?.analysis}
+        existingHasLLM={currentCardData?.hasLLM}
+        on:prepMeeting={(e) => dispatch('prepMeeting', e.detail)}
         on:startMeeting={(e) => dispatch('startMeeting', e.detail)}
         on:postMeeting={(e) => dispatch('postMeeting', e.detail)}
+        on:cardCollected={(e) => dispatch('cardCollected', e.detail)}
+        on:toast={(e) => dispatch('toast', e.detail)}
       />
     {/if}
   </div>
@@ -263,7 +318,7 @@
     cursor: not-allowed;
   }
 
-  .caldav-status {
+  .source-status {
     display: flex;
     align-items: center;
     gap: 8px;
@@ -271,11 +326,11 @@
     border-radius: 8px;
     font-size: 12px;
   }
-  .caldav-status.loading {
+  .source-status.loading {
     background: rgba(245, 158, 11, 0.08);
     color: #f59e0b;
   }
-  .caldav-status.error {
+  .source-status.error {
     background: rgba(239, 68, 68, 0.08);
     color: #f87171;
   }
@@ -408,6 +463,23 @@
     border-color: #252e42;
   }
 
+  .card-badge {
+    font-size: 10px;
+    font-weight: 600;
+    padding: 2px 7px;
+    border-radius: 4px;
+  }
+  .card-badge.ready {
+    background: rgba(16, 185, 129, 0.15);
+    color: #10b981;
+    border: 1px solid rgba(16, 185, 129, 0.3);
+  }
+  .card-badge.pending {
+    background: rgba(245, 158, 11, 0.1);
+    color: #f59e0b;
+    border: 1px solid rgba(245, 158, 11, 0.25);
+  }
+
   .tag {
     font-size: 10px;
     padding: 2px 7px;
@@ -453,3 +525,4 @@
     min-width: 0;
   }
 </style>
+

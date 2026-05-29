@@ -8,6 +8,11 @@ export default defineConfig(({ mode }) => {
   const caldavUrl = env.VITE_CALDAV_URL || ''
 
   const proxy = {
+    '/agent-api': {
+      target: 'http://localhost:8900',
+      changeOrigin: true,
+      rewrite: (path) => path.replace(/^\/agent-api/, ''),
+    },
     '/api': {
       target: 'http://localhost:7860',
       changeOrigin: true,
@@ -38,6 +43,6 @@ export default defineConfig(({ mode }) => {
 
   return {
     plugins: [svelte()],
-    server: { proxy },
+    server: { host: '127.0.0.1', proxy },
   }
 })
